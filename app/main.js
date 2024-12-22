@@ -1,4 +1,5 @@
 const dgram = require('dgram');
+const { encodeHost } = require('./encoder');
 
 // function createResponse() {
 //   const buffer = Buffer.alloc(12);
@@ -28,7 +29,22 @@ function readBits(buffer, byteIndex, bitIndex, numberOfBits) {
   return bits;
 }
 
-function writeHeader() {
+function constructQuestion() {
+  let buffer = Buffer.alloc(0);
+
+  const questionName = encodeHost('codecrafters.io');
+  buffer = Buffer.concat([buffer, questionName]);
+
+  const questionType = Buffer.alloc(2)
+  questionType.writeUInt16BE(1, 0)
+  buffer = Buffer.concat([buffer, questionType])
+
+  const questionClass = Buffer.alloc(2)
+  questionClass.writeUInt16BE(1, 0)
+  return Buffer.concat([buffer, questionType])
+}
+
+function constructHeader() {
   const buffer = Buffer.alloc(12);
   buffer.writeUInt16BE(1234, 0);
   buffer.writeUInt16BE(0b1000000000000000, 2);
@@ -79,7 +95,9 @@ udpSocket.on('message', (incomingMessage, rinfo) => {
   try {
     parseHeader(incomingMessage);
 
-    const response = writeHeader();
+
+    const response = Buffer.concat([constructHeader(), constructQuestion()]);
+
     udpSocket.send(response, rinfo.port, rinfo.address);
   } catch (e) {
     console.log(`Error receiving data: ${e}`);

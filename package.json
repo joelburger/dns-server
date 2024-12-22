@@ -12,6 +12,10 @@
     "author": "",
     "license": "MIT",
     "devDependencies": {
+        "jest": "^29.7.0",
         "prettier": "^3.4.2"
+    },
+    "jest": {
+        "verbose": true
     }
 }
