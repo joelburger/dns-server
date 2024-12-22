@@ -1,14 +1,6 @@
 const dgram = require('dgram');
 const { encodeHost } = require('./encoder');
 
-// function createResponse() {
-//   const buffer = Buffer.alloc(12);
-//   buffer.writeUInt32BE(1 + 1 + message.length, 0); // length prefix
-//   buffer.writeUInt8(20, 4); // message ID for all extensions
-//   buffer.writeUInt8(0, 5); // extension message id
-//   buffer.write(message, 6, 'binary');
-// }
-
 function readBit(buffer, byteIndex, bitIndex) {
   // 1. Get the byte at the specified index
   const byte = buffer[byteIndex];
@@ -46,11 +38,32 @@ function constructQuestion() {
 
 function constructHeader() {
   const buffer = Buffer.alloc(12);
+
+  // Packet Identifier
   buffer.writeUInt16BE(1234, 0);
-  buffer.writeUInt16BE(0b1000000000000000, 2);
-  buffer.writeUInt16BE(0, 4);
+
+  // Flags
+  let flags = 0;
+  flags |= (1 << 15); // Query/Response Indicator (1 bit)
+  flags |= (0 << 11); // Operation Code (4 bits)
+  flags |= (0 << 10); // Authoritative Answer (1 bit)
+  flags |= (0 << 9);  // Truncation (1 bit)
+  flags |= (1 << 8);  // Recursion Desired (1 bit)
+  flags |= (0 << 7);  // Recursion Available (1 bit)
+  flags |= (0 << 4);  // Reserved (3 bits)
+  flags |= (0 << 0);  // Response Code (4 bits)
+  buffer.writeUInt16BE(flags, 2);
+
+  // Question Count
+  buffer.writeUInt16BE(1, 4);
+
+  // Answer Record Count
   buffer.writeUInt16BE(0, 6);
+
+  // Authority Record Count
   buffer.writeUInt16BE(0, 8);
+
+  // Additional Record Count
   buffer.writeUInt16BE(0, 10);
 
   return buffer;
