@@ -11,5 +11,7 @@
     ],
     "author": "",
     "license": "MIT",
-    "dependencies": {}
+    "devDependencies": {
+        "prettier": "^3.4.2"
+    }
 }
