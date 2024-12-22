@@ -100,27 +100,29 @@ function constructHeader(header) {
     return buffer;
 }
 
-function parseHeader(buffer) {
-    const packetIdentifier = buffer.readUInt16BE(0);
+function parseHeader(buffer, offset) {
+    const packetIdentifier = buffer.readUInt16BE(offset)
 
-    const flags = buffer.readUInt16BE(1);
-    const queryResponseIndicator = (flags >> 15) & 1;
-    const operationCode = (flags >> 11) & 0b1111;
-    const authoritativeAnswer = (flags >> 10) & 1;
-    const truncation = (flags >> 9) & 1;
-    const recursionDesired = (flags >> 8) & 1;
-    const recursionAvailable = (flags >> 7) & 1;
-    const reserved = (flags >> 4) & 0b111;
-    const responseCode = flags & 0b1111;
+    // flags
+    const thirdByte = buffer.readUInt8(offset + 2)
+    const queryOrResponseIndicator = (thirdByte >> 7) & 0b00000001
+    const operationCode = (thirdByte >> 3) & 0b00001111;
+    const authoritativeAnswer = (thirdByte >> 2) & 0b00000001;
+    const truncation = (thirdByte >> 1) & 0b00000001;
+    const recursionDesired = (thirdByte) & 0b00000001;
+    const fourthByte = buffer.readUInt8(offset + 3)
+    const recursionAvailable = (fourthByte >> 7) & 0b00000001
+    const reserved = (fourthByte >> 4) & 0b00000111;
+    const responseCode = (fourthByte) & 0b00001111;
 
-    const questionCount = buffer.readUInt16BE(4);
-    const answerRecordCount = buffer.readUInt16BE(6);
-    const authorityRecordCount = buffer.readUInt16BE(8);
-    const additionalRecordCount = buffer.readUInt16BE(10);
+    const questionCount = buffer.readUInt16BE(offset + 4)
+    const answerRecordCount = buffer.readUInt16BE(offset + 6)
+    const authorityRecordCount = buffer.readUInt16BE(offset + 8)
+    const additionalRecordCount = buffer.readUInt16BE(offset + 10)
 
     console.log('Incoming message', {
         packetIdentifier,
-        queryResponseIndicator,
+        queryOrResponseIndicator,
         operationCode,
         authoritativeAnswer,
         truncation,
@@ -136,7 +138,7 @@ function parseHeader(buffer) {
 
     return {
         packetIdentifier,
-        queryResponseIndicator,
+        queryOrResponseIndicator,
         operationCode,
         authoritativeAnswer,
         truncation,
@@ -156,7 +158,7 @@ udpSocket.bind(2053, '127.0.0.1');
 
 udpSocket.on('message', (incomingMessage, rinfo) => {
     try {
-        const header = parseHeader(incomingMessage);
+        const header = parseHeader(incomingMessage, 0);
 
         const response = Buffer.concat([constructHeader(header), constructQuestion(), constructAnswer()]);
 
