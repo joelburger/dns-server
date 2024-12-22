@@ -5,6 +5,10 @@ function encodeString(value) {
   return Buffer.concat([lengthBuffer, valueBuffer]);
 }
 
+function encodeNumber(value) {
+  return Buffer.from(value);
+}
+
 function encodeHost(host) {
   if (!host) {
     return Buffer.from([0x00]);
@@ -12,9 +16,18 @@ function encodeHost(host) {
 
   const parts = host.split('.');
   const encodedParts = parts.map(encodeString);
+
   return Buffer.concat([...encodedParts, Buffer.from([0x00])]);
+}
+
+function encodeIpAddress(ipAddress) {
+  const parts = ipAddress.split('.');
+  const encodedParts = parts.map(encodeNumber);
+
+  return Buffer.concat([...encodedParts]);
 }
 
 module.exports = {
   encodeHost,
+  encodeIpAddress,
 };
