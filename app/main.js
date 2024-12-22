@@ -67,22 +67,22 @@ function constructQuestion() {
     return Buffer.concat(bufferArray);
 }
 
-function constructHeader() {
+function constructHeader(header) {
     const buffer = Buffer.alloc(12);
 
     // Packet Identifier
-    buffer.writeUInt16BE(1234, 0);
+    buffer.writeUInt16BE(header.packetIdentifier, 0);
 
     // Flags
     let flags = 0;
     flags |= (1 << 15); // Query/Response Indicator (1 bit)
-    flags |= (0 << 11); // Operation Code (4 bits)
+    flags |= (header.operationCode << 11); // Operation Code (4 bits)
     flags |= (0 << 10); // Authoritative Answer (1 bit)
     flags |= (0 << 9);  // Truncation (1 bit)
-    flags |= (1 << 8);  // Recursion Desired (1 bit)
+    flags |= (header.recursionDesired << 8);  // Recursion Desired (1 bit)
     flags |= (0 << 7);  // Recursion Available (1 bit)
     flags |= (0 << 4);  // Reserved (3 bits)
-    flags |= (0 << 0);  // Response Code (4 bits)
+    flags |= (header.operationCode === 0 ? 0 : 4 << 0);  // Response Code (4 bits)
     buffer.writeUInt16BE(flags, 2);
 
     // Question Count
@@ -102,14 +102,17 @@ function constructHeader() {
 
 function parseHeader(buffer) {
     const packetIdentifier = buffer.readUInt16BE(0);
-    const queryResponseIndicator = readBit(buffer, 2, 0);
-    const operationCode = readBits(buffer, 2, 1, 4);
-    const authoritativeAnswer = readBit(buffer, 2, 5);
-    const truncation = readBit(buffer, 2, 6);
-    const recursionDesired = readBit(buffer, 2, 7);
-    const recursionAvailable = readBit(buffer, 3, 0);
-    const reserved = readBits(buffer, 3, 1, 3);
-    const responseCode = readBits(buffer, 3, 4, 4);
+
+    const flags = buffer.readUInt16BE(1);
+    const queryResponseIndicator = (flags >> 15) & 1;
+    const operationCode = (flags >> 11) & 0b1111;
+    const authoritativeAnswer = (flags >> 10) & 1;
+    const truncation = (flags >> 9) & 1;
+    const recursionDesired = (flags >> 8) & 1;
+    const recursionAvailable = (flags >> 7) & 1;
+    const reserved = (flags >> 4) & 0b111;
+    const responseCode = flags & 0b1111;
+
     const questionCount = buffer.readUInt16BE(4);
     const answerRecordCount = buffer.readUInt16BE(6);
     const authorityRecordCount = buffer.readUInt16BE(8);
@@ -130,6 +133,22 @@ function parseHeader(buffer) {
         authorityRecordCount,
         additionalRecordCount,
     });
+
+    return {
+        packetIdentifier,
+        queryResponseIndicator,
+        operationCode,
+        authoritativeAnswer,
+        truncation,
+        recursionDesired,
+        recursionAvailable,
+        reserved,
+        responseCode,
+        questionCount,
+        answerRecordCount,
+        authorityRecordCount,
+        additionalRecordCount,
+    };
 }
 
 const udpSocket = dgram.createSocket('udp4');
@@ -137,9 +156,9 @@ udpSocket.bind(2053, '127.0.0.1');
 
 udpSocket.on('message', (incomingMessage, rinfo) => {
     try {
-        parseHeader(incomingMessage);
+        const header = parseHeader(incomingMessage);
 
-        const response = Buffer.concat([constructHeader(), constructQuestion(), constructAnswer()]);
+        const response = Buffer.concat([constructHeader(header), constructQuestion(), constructAnswer()]);
 
         udpSocket.send(response, rinfo.port, rinfo.address);
     } catch (e) {
