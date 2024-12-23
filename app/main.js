@@ -101,42 +101,29 @@ function constructHeader(header) {
 }
 
 function parseHeader(buffer, offset) {
-    const packetIdentifier = buffer.readUInt16BE(offset)
+    const packetIdentifier = buffer.readUInt16BE(offset);
 
-    // flags
-    const thirdByte = buffer.readUInt8(offset + 2)
-    const queryOrResponseIndicator = (thirdByte >> 7) & 0b00000001
-    const operationCode = (thirdByte >> 3) & 0b00001111;
-    const authoritativeAnswer = (thirdByte >> 2) & 0b00000001;
-    const truncation = (thirdByte >> 1) & 0b00000001;
-    const recursionDesired = (thirdByte) & 0b00000001;
-    const fourthByte = buffer.readUInt8(offset + 3)
-    const recursionAvailable = (fourthByte >> 7) & 0b00000001
-    const reserved = (fourthByte >> 4) & 0b00000111;
-    const responseCode = (fourthByte) & 0b00001111;
+    // Extract flags from the third byte
+    const thirdByte = buffer.readUInt8(offset + 2);
+    const queryOrResponseIndicator = (thirdByte >> 7) & 0x01;
+    const operationCode = (thirdByte >> 3) & 0x0F;
+    const authoritativeAnswer = (thirdByte >> 2) & 0x01;
+    const truncation = (thirdByte >> 1) & 0x01;
+    const recursionDesired = thirdByte & 0x01;
 
-    const questionCount = buffer.readUInt16BE(offset + 4)
-    const answerRecordCount = buffer.readUInt16BE(offset + 6)
-    const authorityRecordCount = buffer.readUInt16BE(offset + 8)
-    const additionalRecordCount = buffer.readUInt16BE(offset + 10)
+    // Extract flags from the fourth byte
+    const fourthByte = buffer.readUInt8(offset + 3);
+    const recursionAvailable = (fourthByte >> 7) & 0x01;
+    const reserved = (fourthByte >> 4) & 0x07;
+    const responseCode = fourthByte & 0x0F;
 
-    console.log('Incoming message', {
-        packetIdentifier,
-        queryOrResponseIndicator,
-        operationCode,
-        authoritativeAnswer,
-        truncation,
-        recursionDesired,
-        recursionAvailable,
-        reserved,
-        responseCode,
-        questionCount,
-        answerRecordCount,
-        authorityRecordCount,
-        additionalRecordCount,
-    });
+    // Read counts
+    const questionCount = buffer.readUInt16BE(offset + 4);
+    const answerRecordCount = buffer.readUInt16BE(offset + 6);
+    const authorityRecordCount = buffer.readUInt16BE(offset + 8);
+    const additionalRecordCount = buffer.readUInt16BE(offset + 10);
 
-    return {
+    const parsedHeader = {
         packetIdentifier,
         queryOrResponseIndicator,
         operationCode,
@@ -151,6 +138,10 @@ function parseHeader(buffer, offset) {
         authorityRecordCount,
         additionalRecordCount,
     };
+
+    console.log('Incoming message', parsedHeader);
+
+    return parsedHeader;
 }
 
 const udpSocket = dgram.createSocket('udp4');
