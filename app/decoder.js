@@ -2,14 +2,19 @@ function decodeHost(encodedHost) {
   let cursor = 0;
   const parts = [];
   while (cursor < encodedHost.length) {
-    const hostLength = encodedHost[cursor];
-    if (hostLength === 0) {
+    const marker = encodedHost[cursor];
+    if (marker === 0) {
       break;
     }
     cursor++;
-    const host = encodedHost.subarray(cursor, cursor + hostLength);
-    cursor += hostLength;
-    parts.push(host);
+
+    if (marker === 0xC0) {
+      console.log('pointer!!!');
+    } else {
+      const host = encodedHost.subarray(cursor, cursor + marker);
+      cursor += marker;
+      parts.push(host);
+    }
   }
   return { host: parts.join('.'), cursor };
 }
