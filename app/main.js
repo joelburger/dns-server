@@ -174,23 +174,32 @@ function parseQuestions(buffer, offset, questionCount) {
     return questions;
 }
 
-function startServer(udpSocket, address, port) {
+function queryForwardingDnsServer(udpSocket, questions, forwardingDnsAddress, forwardingDnsPort) {
 
-    console.log(cowsay.say({text: `Starting server on ${address}:${port}`}));
+    for(const question of questions) {
+        console.log(`Querying ${forwardingDnsAddress}:${forwardingDnsPort}: ${question.questionName}`)
+    }
+}
 
+function startServer(udpSocket, address, port, forwardingDnsAddress, forwardingDnsPort) {
     udpSocket.bind(port, address);
 
     udpSocket.on('message', (incomingMessage, rinfo) => {
         try {
             const header = parseHeader(incomingMessage, 0);
             const questions = parseQuestions(incomingMessage, 12, header.questionCount);
-            const response = Buffer.concat([
-                constructHeader(header),
-                constructQuestions(questions),
-                constructAnswers(questions),
-            ]);
 
-            udpSocket.send(response, rinfo.port, rinfo.address);
+            if (header.queryOrResponseIndicator === 0) {
+                queryForwardingDnsServer(udpSocket, questions, forwardingDnsAddress, forwardingDnsPort);
+                const response = Buffer.concat([
+                    constructHeader(header),
+                    constructQuestions(questions),
+                    constructAnswers(questions),
+                ]);
+
+                udpSocket.send(response, rinfo.port, rinfo.address);
+            }
+
         } catch (e) {
             console.log(`Error receiving data: ${e}`);
         }
@@ -202,7 +211,7 @@ function startServer(udpSocket, address, port) {
 
     udpSocket.on('listening', () => {
         const address = udpSocket.address();
-        console.log(`Server listening ${address.address}:${address.port}`);
+        console.log(cowsay.say({text: `Server listening on ${address.address}:${address.port}`}));
     });
 }
 
@@ -214,9 +223,7 @@ const parameters = process.argv.slice(2);
 
 const udpSocket = dgram.createSocket('udp4');
 
-const [, clientAddressAndPort] = parameters;
-const [address, portAsString] = clientAddressAndPort.split(':');
+const [, forwardingAddressAndPort] = parameters;
+const [forwardingAddress, forwardingPortAsString] = forwardingAddressAndPort.split(':');
 
-console.log('parameters', parameters);
-
-startServer(udpSocket, '127.0.0.1', 2053);
+startServer(udpSocket, '127.0.0.1', 2053, forwardingAddress, Number(forwardingPortAsString));
