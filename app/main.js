@@ -162,7 +162,6 @@ function parseQuestions(buffer, offset, questionCount) {
       cursor += 2; // move cursor for question class
       const questionName = questionNameParts.join('.');
       const question = { questionName, questionType, questionClass };
-      console.log('Incoming question 2', question);
       questions.push(question);
     } else {
       let questionNameParts = [];
@@ -171,15 +170,12 @@ function parseQuestions(buffer, offset, questionCount) {
         questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
         cursor += byte; // move cursor for question name
         byte = buffer[cursor];
-
-        console.log(`foo ${byte}`);
         cursor += 1; // move cursor for byte
       }
 
       if (byte === 192) {
         byte = buffer[cursor];
         questionNameParts = questionNameParts.concat(resolvePointer(buffer, byte));
-        console.log('questionNameParts', questionNameParts);
       } else {
         questionType = buffer.readUInt16BE(cursor);
         cursor += 2; // move cursor for question type
@@ -189,7 +185,6 @@ function parseQuestions(buffer, offset, questionCount) {
 
       const questionName = questionNameParts.join('.');
       const question = { questionName, questionType, questionClass };
-      console.log('Incoming question', question);
       questions.push(question);
     }
   }
