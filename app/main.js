@@ -1,7 +1,5 @@
 const dgram = require('dgram');
-const cowsay = require('cowsay');
 const { encodeHost, encodeIpAddress } = require('./encoder');
-const { decodeHost } = require('./decoder');
 
 function constructAnswers(questions) {
   const bufferArray = [];
@@ -150,7 +148,7 @@ function parseQuestions(buffer, offset, questionCount) {
 
     let questionNameParts = [];
 
-    while (byte !== 0x0 && byte !== 192) {
+    while (byte !== 0x0 && byte !== 0xC0) {
       questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
       cursor += byte; // move cursor for question name
       byte = buffer[cursor];
