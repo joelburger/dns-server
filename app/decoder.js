@@ -1,6 +1,8 @@
-function decodeHost(encodedHost) {
+function decodeHost(buffer, offset) {
   let cursor = 0;
   const parts = [];
+
+  const encodedHost = buffer.subarray(offset);
   while (cursor < encodedHost.length) {
     const marker = encodedHost[cursor];
     if (marker === 0) {

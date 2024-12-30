@@ -17,5 +17,8 @@
     },
     "jest": {
         "verbose": true
+    },
+    "dependencies": {
+        "cowsay": "^1.6.0"
     }
 }

@@ -1,4 +1,5 @@
 const dgram = require('dgram');
+const cowsay = require('cowsay');
 const { encodeHost, encodeIpAddress } = require('./encoder');
 const { decodeHost } = require('./decoder');
 
@@ -70,10 +71,10 @@ function constructHeader(header) {
   buffer.writeUInt16BE(flags, 2);
 
   // Question Count
-  buffer.writeUInt16BE(1, 4);
+  buffer.writeUInt16BE(header.questionCount, 4);
 
   // Answer Record Count
-  buffer.writeUInt16BE(1, 6);
+  buffer.writeUInt16BE(header.questionCount, 6);
 
   // Authority Record Count
   buffer.writeUInt16BE(0, 8);
@@ -128,30 +129,70 @@ function parseHeader(buffer, offset) {
   return parsedHeader;
 }
 
+function resolvePointer(buffer, pointer) {
+  let cursor = pointer;
+  const questionNameParts = [];
+  let byte = buffer[cursor];
+
+  cursor += 1;
+  while (byte !== 0x0) {
+
+    questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
+    cursor += byte; // move cursor for question name
+    byte = buffer[cursor];
+    cursor += 1; // move cursor for byte
+  }
+  return questionNameParts;
+}
+
 function parseQuestions(buffer, offset, questionCount) {
   const questions = [];
   let cursor = offset;
-
+  let questionType, questionClass;
   for (let i = 0; i < questionCount; i++) {
-    const startingPosition = cursor;
+    let byte = buffer[cursor];
+    cursor += 1; // move cursor for byte
+    if (byte === 0xc0) {
+      cursor += 1; // move cursor for byte
+      byte = buffer[cursor];
+      const questionNameParts = resolvePointer(buffer, byte);
+      const questionType = buffer.readUInt16BE(cursor);
+      cursor += 2; // move cursor for question type
+      const questionClass = buffer.readUInt16BE(cursor);
+      cursor += 2; // move cursor for question class
+      const questionName = questionNameParts.join('.');
+      const question = { questionName, questionType, questionClass };
+      console.log('Incoming question 2', question);
+      questions.push(question);
+    } else {
+      let questionNameParts = [];
 
-    const { host, cursor: questionNameLength } = decodeHost(buffer.subarray(cursor));
+      while (byte !== 0x0 && byte !== 192) {
+        questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
+        cursor += byte; // move cursor for question name
+        byte = buffer[cursor];
 
-    cursor += questionNameLength + 1;
+        console.log(`foo ${byte}`);
+        cursor += 1; // move cursor for byte
+      }
 
-    const questionType = buffer.readUInt16BE(cursor);
-    cursor += 2;
+      if (byte === 192) {
+        byte = buffer[cursor];
+        questionNameParts = questionNameParts.concat(resolvePointer(buffer, byte));
+        console.log('questionNameParts', questionNameParts);
+      } else {
+        questionType = buffer.readUInt16BE(cursor);
+        cursor += 2; // move cursor for question type
+        questionClass = buffer.readUInt16BE(cursor);
+        cursor += 2; // move cursor for question class
+      }
 
-    const questionClass = buffer.readUInt16BE(cursor);
-    cursor += 2;
-
-    const questionBuffer = buffer.subarray(startingPosition, cursor);
-
-    const question = { questionName: host, questionType, questionClass, questionBuffer };
-    console.log('Incoming question', question);
-    questions.push(question);
+      const questionName = questionNameParts.join('.');
+      const question = { questionName, questionType, questionClass };
+      console.log('Incoming question', question);
+      questions.push(question);
+    }
   }
-
   return questions;
 }
 
@@ -168,6 +209,8 @@ udpSocket.on('message', (incomingMessage, rinfo) => {
       constructQuestions(questions),
       constructAnswers(questions),
     ]);
+
+    // console.log(cowsay.say({ text: JSON.stringify({ response }) }));
 
     udpSocket.send(response, rinfo.port, rinfo.address);
   } catch (e) {
