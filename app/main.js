@@ -108,7 +108,7 @@ function parseHeader(buffer, offset) {
   const authorityRecordCount = buffer.readUInt16BE(offset + 8);
   const additionalRecordCount = buffer.readUInt16BE(offset + 10);
 
-  const parsedHeader = {
+  return {
     packetIdentifier,
     queryOrResponseIndicator,
     operationCode,
@@ -123,10 +123,6 @@ function parseHeader(buffer, offset) {
     authorityRecordCount,
     additionalRecordCount,
   };
-
-  console.log('Incoming message header', parsedHeader);
-
-  return parsedHeader;
 }
 
 function resolvePointer(buffer, pointer) {
@@ -136,7 +132,6 @@ function resolvePointer(buffer, pointer) {
 
   cursor += 1;
   while (byte !== 0x0) {
-
     questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
     cursor += byte; // move cursor for question name
     byte = buffer[cursor];
@@ -152,41 +147,29 @@ function parseQuestions(buffer, offset, questionCount) {
   for (let i = 0; i < questionCount; i++) {
     let byte = buffer[cursor];
     cursor += 1; // move cursor for byte
-    if (byte === 0xc0) {
-      cursor += 1; // move cursor for byte
+
+    let questionNameParts = [];
+
+    while (byte !== 0x0 && byte !== 192) {
+      questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
+      cursor += byte; // move cursor for question name
       byte = buffer[cursor];
-      const questionNameParts = resolvePointer(buffer, byte);
-      const questionType = buffer.readUInt16BE(cursor);
-      cursor += 2; // move cursor for question type
-      const questionClass = buffer.readUInt16BE(cursor);
-      cursor += 2; // move cursor for question class
-      const questionName = questionNameParts.join('.');
-      const question = { questionName, questionType, questionClass };
-      questions.push(question);
-    } else {
-      let questionNameParts = [];
-
-      while (byte !== 0x0 && byte !== 192) {
-        questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
-        cursor += byte; // move cursor for question name
-        byte = buffer[cursor];
-        cursor += 1; // move cursor for byte
-      }
-
-      if (byte === 192) {
-        byte = buffer[cursor];
-        questionNameParts = questionNameParts.concat(resolvePointer(buffer, byte));
-      } else {
-        questionType = buffer.readUInt16BE(cursor);
-        cursor += 2; // move cursor for question type
-        questionClass = buffer.readUInt16BE(cursor);
-        cursor += 2; // move cursor for question class
-      }
-
-      const questionName = questionNameParts.join('.');
-      const question = { questionName, questionType, questionClass };
-      questions.push(question);
+      cursor += 1; // move cursor for byte
     }
+
+    if (byte === 192) {
+      byte = buffer[cursor];
+      questionNameParts = questionNameParts.concat(resolvePointer(buffer, byte));
+    } else {
+      questionType = buffer.readUInt16BE(cursor);
+      cursor += 2; // move cursor for question type
+      questionClass = buffer.readUInt16BE(cursor);
+      cursor += 2; // move cursor for question class
+    }
+
+    const questionName = questionNameParts.join('.');
+    const question = { questionName, questionType, questionClass };
+    questions.push(question);
   }
   return questions;
 }
@@ -198,14 +181,11 @@ udpSocket.on('message', (incomingMessage, rinfo) => {
   try {
     const header = parseHeader(incomingMessage, 0);
     const questions = parseQuestions(incomingMessage, 12, header.questionCount);
-
     const response = Buffer.concat([
       constructHeader(header),
       constructQuestions(questions),
       constructAnswers(questions),
     ]);
-
-    // console.log(cowsay.say({ text: JSON.stringify({ response }) }));
 
     udpSocket.send(response, rinfo.port, rinfo.address);
   } catch (e) {
