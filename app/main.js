@@ -155,7 +155,7 @@ function parseQuestions(buffer, offset, questionCount) {
       cursor += 1; // move cursor for byte
     }
 
-    if (byte === 192) {
+    if (byte === 0xC0) {
       byte = buffer[cursor];
       questionNameParts = questionNameParts.concat(resolvePointer(buffer, byte));
     } else {
