@@ -189,6 +189,8 @@ function startServer(udpSocket, address, port, forwardingDnsAddress, forwardingD
             const header = parseHeader(incomingMessage, 0);
             const questions = parseQuestions(incomingMessage, 12, header.questionCount);
 
+            console.log({header, questions});
+
             if (header.queryOrResponseIndicator === 0) {
                 queryForwardingDnsServer(udpSocket, questions, forwardingDnsAddress, forwardingDnsPort);
                 const response = Buffer.concat([
@@ -196,6 +198,8 @@ function startServer(udpSocket, address, port, forwardingDnsAddress, forwardingD
                     constructQuestions(questions),
                     constructAnswers(questions),
                 ]);
+
+                console.log({response: response.toString()});
 
                 udpSocket.send(response, rinfo.port, rinfo.address);
             }
