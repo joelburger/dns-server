@@ -1,58 +1,102 @@
 const dgram = require('dgram');
 const cowsay = require('cowsay');
 const {encodeHost, encodeIpAddress} = require('./encoder');
-const process = require("process");
+const process = require('process');
 
-function constructAnswers(questions) {
+const state = {
+    questions: [],
+    answers: [],
+};
+
+function constructAnswers(answers) {
     const bufferArray = [];
 
-    for (const question of questions) {
-        const answerName = encodeHost(question.questionName);
-        bufferArray.push(answerName);
+    for (const answer of answers) {
+        bufferArray.push(encodeHost(answer.questionName));
 
         const answerType = Buffer.alloc(2);
-        answerType.writeUInt16BE(1, 0);
+        answerType.writeUInt16BE(answer.answerType, 0);
         bufferArray.push(answerType);
 
         const answerClass = Buffer.alloc(2);
-        answerClass.writeUInt16BE(1, 0);
+        answerClass.writeUInt16BE(answer.answerClass, 0);
         bufferArray.push(answerClass);
 
         const answerTtl = Buffer.alloc(4);
-        answerTtl.writeUInt32BE(60, 0);
+        answerTtl.writeUInt32BE(answer.answerTtl, 0);
         bufferArray.push(answerTtl);
 
         const answerLength = Buffer.alloc(2);
         answerLength.writeUInt16BE(4, 0);
         bufferArray.push(answerLength);
 
-        const answerData = encodeIpAddress('8.8.8.8');
-        bufferArray.push(answerData);
+        bufferArray.push(answer.answerData);
     }
 
     return Buffer.concat(bufferArray);
+}
+
+function constructQuestion(question) {
+    const bufferArray = [];
+    const questionName = encodeHost(question.questionName);
+    bufferArray.push(questionName);
+
+    const questionType = Buffer.alloc(2);
+    questionType.writeUInt16BE(1, 0);
+    bufferArray.push(questionType);
+
+    const questionClass = Buffer.alloc(2);
+    questionClass.writeUInt16BE(1, 0);
+    bufferArray.push(questionClass);
+
+    return bufferArray;
 }
 
 function constructQuestions(questions) {
     const bufferArray = [];
 
     for (const question of questions) {
-        const questionName = encodeHost(question.questionName);
-        bufferArray.push(questionName);
-
-        const questionType = Buffer.alloc(2);
-        questionType.writeUInt16BE(1, 0);
-        bufferArray.push(questionType);
-
-        const questionClass = Buffer.alloc(2);
-        questionClass.writeUInt16BE(1, 0);
-        bufferArray.push(questionClass);
+        const questionBuffer = constructQuestion(question);
+        bufferArray.push(...questionBuffer);
     }
 
     return Buffer.concat(bufferArray);
 }
 
-function constructHeader(header) {
+function constructRequestHeader(packetIdentifier) {
+    const buffer = Buffer.alloc(12);
+
+    // Packet Identifier
+    buffer.writeUInt16BE(packetIdentifier, 0);
+
+    // Flags
+    let flags = 0;
+    flags |= 0 << 15; // Query/Response Indicator (1 bit)
+    flags |= 0 << 11; // Operation Code (4 bits)
+    flags |= 0 << 10; // Authoritative Answer (1 bit)
+    flags |= 0 << 9; // Truncation (1 bit)
+    flags |= 0 << 8; // Recursion Desired (1 bit)
+    flags |= 0 << 7; // Recursion Available (1 bit)
+    flags |= 0 << 4; // Reserved (3 bits)
+    flags |= 0; // Response Code (4 bits)
+    buffer.writeUInt16BE(flags, 2);
+
+    // Question Count
+    buffer.writeUInt16BE(1, 4);
+
+    // Answer Record Count
+    buffer.writeUInt16BE(0, 6);
+
+    // Authority Record Count
+    buffer.writeUInt16BE(0, 8);
+
+    // Additional Record Count
+    buffer.writeUInt16BE(0, 10);
+
+    return buffer;
+}
+
+function constructResponseHeader(header) {
     const buffer = Buffer.alloc(12);
 
     // Packet Identifier
@@ -150,14 +194,14 @@ function parseQuestions(buffer, offset, questionCount) {
 
         let questionNameParts = [];
 
-        while (byte !== 0x0 && byte !== 0xC0) {
+        while (byte !== 0x0 && byte !== 0xc0) {
             questionNameParts.push(buffer.subarray(cursor, cursor + byte).toString());
             cursor += byte; // move cursor for question name
             byte = buffer[cursor];
             cursor += 1; // move cursor for byte
         }
 
-        if (byte === 0xC0) {
+        if (byte === 0xc0) {
             byte = buffer[cursor];
             questionNameParts = questionNameParts.concat(resolvePointer(buffer, byte));
         } else {
@@ -171,42 +215,100 @@ function parseQuestions(buffer, offset, questionCount) {
         const question = {questionName, questionType, questionClass};
         questions.push(question);
     }
-    return questions;
+    return {questions, offset: cursor};
 }
 
-function queryForwardingDnsServer(udpSocket, questions, forwardingDnsAddress, forwardingDnsPort) {
+function queryForwardingDnsServer(querySocket, questions, forwardingDnsAddress, forwardingDnsPort) {
+    for (const question of questions) {
+        const packetIdentifier = Math.floor(Math.random() * 65536);
 
-    for(const question of questions) {
-        console.log(`Querying ${forwardingDnsAddress}:${forwardingDnsPort}: ${question.questionName}`)
+        console.log(
+            `[${packetIdentifier}] - Querying ${forwardingDnsAddress}:${forwardingDnsPort}: ${question.questionName}`,
+        );
+
+        const requestHeader = constructRequestHeader(packetIdentifier);
+        const requestQuestion = Buffer.concat(constructQuestion(question));
+        const request = Buffer.concat([requestHeader, requestQuestion]);
+        querySocket.send(request, forwardingDnsPort, forwardingDnsAddress);
     }
 }
 
-function startServer(udpSocket, address, port, forwardingDnsAddress, forwardingDnsPort) {
+function parseAnswer(response, offset) {
+    const buffer = response.subarray(offset);
+
+    let cursor = 0;
+    let byte = buffer[cursor];
+
+    cursor += 1; // move cursor for byte
+
+    const questionNameParts = [];
+    while (byte !== 0x0) {
+        const questionName = buffer.subarray(cursor, cursor + byte);
+        questionNameParts.push(questionName);
+        cursor += byte;
+        byte = buffer[cursor];
+        cursor += 1; // move cursor for byte
+    }
+
+    const questionName = questionNameParts.join('.');
+    const answerType = buffer.readUInt16BE(cursor);
+    cursor += 2; // move cursor for answer type
+    const answerClass = buffer.readUInt16BE(cursor);
+    cursor += 2;
+    const answerTtl = buffer.readUInt32BE(cursor);
+    cursor += 4;
+    const answerLength = buffer.readUInt16BE(cursor);
+    cursor += 2;
+    const answerData = buffer.subarray(cursor, cursor + answerLength);
+
+    return {
+        questionName,
+        answerType,
+        answerClass,
+        answerTtl,
+        answerLength,
+        answerData,
+    };
+}
+
+function startServer(udpSocket, querySocket, address, port, forwardingDnsAddress, forwardingDnsPort) {
     udpSocket.bind(port, address);
 
+    querySocket.on('message', (incomingMessage, rinfo) => {
+        const header = parseHeader(incomingMessage, 0);
+        const {questions, offset} = parseQuestions(incomingMessage, 12, header.questionCount);
+        const answer = parseAnswer(incomingMessage, offset);
+        console.log('Query socket', {header, questions, answer});
+        state.answers.push(answer);
+    });
+
+    querySocket.on('error', (err) => {
+        console.log(`Query socket error: ${err}`);
+    });
+
     udpSocket.on('message', (incomingMessage, rinfo) => {
-        try {
-            const header = parseHeader(incomingMessage, 0);
-            const questions = parseQuestions(incomingMessage, 12, header.questionCount);
+        const header = parseHeader(incomingMessage, 0);
+        console.log('Main socket', header);
+        const {questions, offset} = parseQuestions(incomingMessage, 12, header.questionCount);
+        queryForwardingDnsServer(querySocket, questions, forwardingDnsAddress, forwardingDnsPort);
 
-            console.log({header, questions});
+        const intervalId = setInterval(() => {
+            if (state.answers.length > 0) {
+                console.log('Replying back to client');
 
-            if (header.queryOrResponseIndicator === 0) {
-                queryForwardingDnsServer(udpSocket, questions, forwardingDnsAddress, forwardingDnsPort);
+                clearInterval(intervalId);
+
                 const response = Buffer.concat([
-                    constructHeader(header),
+                    constructResponseHeader(header),
                     constructQuestions(questions),
-                    constructAnswers(questions),
+                    constructAnswers(state.answers),
                 ]);
 
-                console.log({response: response.toString()});
-
                 udpSocket.send(response, rinfo.port, rinfo.address);
-            }
 
-        } catch (e) {
-            console.log(`Error receiving data: ${e}`);
-        }
+                state.answers = [];
+            }
+        }, 100);
     });
 
     udpSocket.on('error', (err) => {
@@ -219,15 +321,12 @@ function startServer(udpSocket, address, port, forwardingDnsAddress, forwardingD
     });
 }
 
-function connectToRemoteServer(udpSocket, address, port) {
-    console.log(cowsay.say({text: `Connecting to  ${address}:${port}`}));
-}
-
 const parameters = process.argv.slice(2);
 
 const udpSocket = dgram.createSocket('udp4');
+const querySocket = dgram.createSocket('udp4');
 
 const [, forwardingAddressAndPort] = parameters;
 const [forwardingAddress, forwardingPortAsString] = forwardingAddressAndPort.split(':');
 
-startServer(udpSocket, '127.0.0.1', 2053, forwardingAddress, Number(forwardingPortAsString));
+startServer(udpSocket, querySocket, '127.0.0.1', 2053, forwardingAddress, Number(forwardingPortAsString));

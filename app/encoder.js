@@ -17,7 +17,7 @@ function encodeHost(host) {
   const parts = host.split('.');
   const encodedParts = parts.map(encodeString);
 
-  return Buffer.concat([...encodedParts, Buffer.from([0x00])]);
+  return Buffer.concat([...encodedParts, Buffer.from([0x0])]);
 }
 
 function encodeIpAddress(ipAddress) {
