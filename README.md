@@ -17,3 +17,13 @@ This project is a simple Node.js DNS server that handles DNS queries and respons
 Install dependencies:
 ```sh
 npm install
+```
+
+## Usage
+
+To start the DNS server, run the following command:
+
+```sh
+node app/main  --resolver <address>
+```
+where `<address>` is of the form `<ip>:<port>`.
